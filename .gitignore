@@ -1,0 +1,95 @@
+# Apache Airflow - GitIgnore
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+*.code-workspace
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Docker
+.docker/
+
+# Airflow specific
+logs/
+plugins/
+!plugins/.gitkeep
+dags/
+!dags/.gitkeep
+config/
+!config/.gitkeep
+
+# PostgreSQL
+postgresql/
+
+# Redis
+redis/
+
+# MongoDB
+mongodb/
+
+# Local config
+airflow.cfg
+unittests.cfg
+
+# Test coverage
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+
+# Pylint
+.pylintrc
+.pylint cache
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# IDE
+*.iml
+*.ipr
+*.iws
+.project
+.pydevproject
+.settings/
