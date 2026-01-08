@@ -24,19 +24,7 @@ cp .env.example .env
 # Paste the generated secrets into .env
 ```
 
-### 2. Generate SSL Certificates (Optional)
-
-For HTTPS support:
-
-```bash
-# Self-signed (testing only)
-just -f Justfile-prod prod-generate-ssl
-
-# Or use Let's Encrypt for production
-# certbot certonly --standalone -d your-domain.com
-```
-
-### 3. Build and Deploy
+### 2. Build and Deploy
 
 ```bash
 # Build production images
@@ -50,12 +38,9 @@ just -f Justfile-prod prod-up
 
 # Or with monitoring (Prometheus + Grafana)
 just -f Justfile-prod prod-up-monitoring
-
-# Or with HTTPS (requires SSL certificates)
-just -f Justfile-prod prod-up-proxy
 ```
 
-### 4. Verify Deployment
+### 3. Verify Deployment
 
 ```bash
 # Check health
@@ -65,7 +50,7 @@ just -f Justfile-prod prod-health
 just -f Justfile-prod prod-logs
 ```
 
-### 5. Access Airflow
+### 4. Access Airflow
 
 - **Airflow UI**: http://localhost:8080
 - **Grafana** (if monitoring enabled): http://localhost:3000
@@ -120,7 +105,7 @@ Before going live, ensure:
 
 - [ ] Strong passwords set in `.env`
 - [ ] Fernet key generated and set
-- [ ] SSL/TLS certificates configured (if using HTTPS)
+- [ ] Load balancer with SSL/TLS configured (if needed)
 - [ ] Firewall rules configured
 - [ ] Automated backups scheduled
 - [ ] Monitoring enabled
@@ -183,6 +168,6 @@ For issues or questions:
 - Never commit `.env` file to version control
 - Use strong, unique passwords for all services
 - Rotate secrets regularly
-- Enable SSL/TLS for production
+- Use a load balancer with SSL/TLS for production
 - Configure firewall rules appropriately
 - Use external secrets management (Vault, AWS Secrets Manager, etc.) for production

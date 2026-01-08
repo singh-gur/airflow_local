@@ -28,7 +28,7 @@ This guide provides comprehensive instructions for deploying Apache Airflow to p
 ### Production Checklist
 
 - [ ] Firewall configured with appropriate rules
-- [ ] SSL/TLS certificates obtained (for HTTPS)
+- [ ] Load balancer configured with SSL/TLS (for HTTPS)
 - [ ] Domain name configured (if using)
 - [ ] Backup storage configured
 - [ ] Monitoring infrastructure ready
@@ -44,7 +44,7 @@ git clone <repository-url>
 cd airflow_local
 
 # Create required directories
-mkdir -p dags logs plugins config backups/postgres monitoring nginx
+mkdir -p dags logs plugins config backups/postgres monitoring
 ```
 
 ### 2. Generate Secrets
@@ -168,24 +168,19 @@ Supported backends:
 
 ### Network Security
 
-1. **Use Nginx Reverse Proxy** (included):
+1. **Use External Load Balancer or Reverse Proxy**:
 
-```bash
-# Start with nginx proxy profile
-docker compose -f docker-compose.prod.yaml --profile proxy up -d
-```
+For production deployments, use an external reverse proxy:
+- AWS Application Load Balancer
+- Google Cloud Load Balancer
+- Azure Application Gateway
+- Traefik, HAProxy, or Caddy
 
-2. **Configure SSL/TLS**:
-
-Place certificates in `nginx/ssl/`:
-- `nginx/ssl/cert.pem`
-- `nginx/ssl/key.pem`
-
-3. **Firewall Rules**:
+2. **Firewall Rules**:
 
 ```bash
 # Allow only necessary ports
-# - 80/443 (HTTP/HTTPS) - external access
+# - 8080 (Airflow UI) - through load balancer only
 # - 5432 (PostgreSQL) - only from Airflow containers
 # - 6379 (Redis) - only from Airflow containers
 ```
@@ -216,7 +211,7 @@ docker compose -f docker-compose.prod.yaml up -d
 just -f Justfile-prod up
 ```
 
-### With Monitoring
+### With Monitoring (Optional)
 
 ```bash
 # Start with monitoring stack (Prometheus + Grafana)
@@ -236,6 +231,14 @@ docker compose -f docker-compose.prod.yaml up -d --scale airflow-worker=5
 # Or set in .env:
 AIRFLOW_WORKER_REPLICAS=5
 ```
+
+### SSL/TLS (Use External Load Balancer)
+
+For production HTTPS, use an external load balancer or reverse proxy:
+- AWS: Application Load Balancer with ACM certificates
+- Google Cloud: HTTPS Load Balancer with managed certificates
+- Azure: Application Gateway with SSL termination
+- On-premise: HAProxy, Traefik, or cloud provider load balancer
 
 ## Monitoring
 
@@ -452,7 +455,7 @@ docker compose -f docker-compose.prod.yaml exec airflow-scheduler airflow config
 
 - [ ] Use strong, unique passwords
 - [ ] Rotate Fernet key periodically
-- [ ] Enable SSL/TLS for all connections
+- [ ] Configure load balancer with SSL/TLS
 - [ ] Use secrets management backend
 - [ ] Implement network segmentation
 - [ ] Enable audit logging

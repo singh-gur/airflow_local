@@ -18,7 +18,7 @@ DOCKER_COMPOSE_FILE := "docker-compose.prod.yaml"
 [no-cd]
 prod-setup:
     @echo "Setting up production environment..."
-    @mkdir -p dags logs plugins config backups/postgres monitoring nginx/ssl
+    @mkdir -p dags logs plugins config backups/postgres monitoring
     @echo "✓ Directories created"
     @echo ""
     @echo "Generating secrets..."
@@ -78,17 +78,7 @@ prod-up-monitoring:
     @echo "  - Grafana: http://localhost:3000"
     @echo "  - Prometheus: http://localhost:9090"
 
-# Start services with Nginx proxy (SSL/TLS)
-[group('Runtime')]
-[no-cd]
-prod-up-proxy:
-    @echo "Starting production services with Nginx proxy..."
-    @docker compose -f {{DOCKER_COMPOSE_FILE}} --profile proxy up -d
-    @echo "✓ Services started with Nginx proxy"
-    @echo ""
-    @echo "Access points:"
-    @echo "  - HTTP: http://localhost (redirects to HTTPS)"
-    @echo "  - HTTPS: https://localhost"
+
 
 # Stop all production services
 [group('Runtime')]
@@ -221,19 +211,7 @@ prod-rotate-fernet:
     @echo "New Fernet key:"
     @python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 
-# Generate SSL certificates (self-signed for testing)
-[group('Security')]
-[no-cd]
-prod-generate-ssl:
-    @echo "Generating self-signed SSL certificate..."
-    @mkdir -p nginx/ssl
-    @openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-        -keyout nginx/ssl/key.pem \
-        -out nginx/ssl/cert.pem \
-        -subj "/C=US/ST=State/L=City/O=Organization/CN=localhost"
-    @echo "✓ SSL certificate generated at nginx/ssl/"
-    @echo ""
-    @echo "For production, use certificates from a trusted CA (Let's Encrypt, etc.)"
+
 
 # ============================================================================
 # CONTAINER ACCESS
@@ -347,7 +325,7 @@ prod-help:
     @echo "Runtime:"
     @echo "  prod-up                Start all services"
     @echo "  prod-up-monitoring     Start with monitoring"
-    @echo "  prod-up-proxy          Start with Nginx proxy"
+    @echo ""
     @echo "  prod-down              Stop all services"
     @echo "  prod-restart           Restart all services"
     @echo "  prod-scale <N>         Scale workers to N replicas"
@@ -371,7 +349,7 @@ prod-help:
     @echo ""
     @echo "Security:"
     @echo "  prod-rotate-fernet     Rotate Fernet key"
-    @echo "  prod-generate-ssl      Generate SSL certificate"
+    @echo ""
     @echo ""
     @echo "Deployment:"
     @echo "  prod-deploy            Deploy with zero-downtime"

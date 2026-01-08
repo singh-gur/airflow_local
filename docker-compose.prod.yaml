@@ -432,31 +432,6 @@ services:
           cpus: '0.5'
           memory: 256M
 
-  # Nginx Reverse Proxy (optional, for TLS termination)
-  nginx:
-    image: nginx:1.25-alpine
-    profiles:
-      - proxy
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ${AIRFLOW_PROJ_DIR:-.}/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ${AIRFLOW_PROJ_DIR:-.}/nginx/ssl:/etc/nginx/ssl:ro
-    depends_on:
-      - airflow-webserver
-    restart: unless-stopped
-    networks:
-      - airflow-network
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 256M
-        reservations:
-          cpus: '0.5'
-          memory: 128M
-
 networks:
   airflow-network:
     driver: bridge
