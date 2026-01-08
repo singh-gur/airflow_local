@@ -1,0 +1,380 @@
+# Apache Airflow Production Tasks
+# Use `just -f Justfile-prod --list` to see all available recipes
+
+set dotenv-load
+
+# Default Airflow version
+AIRFLOW_VERSION := "2.10.4"
+
+# Docker compose file for production
+DOCKER_COMPOSE_FILE := "docker-compose.prod.yaml"
+
+# ============================================================================
+# PRODUCTION DEPLOYMENT
+# ============================================================================
+
+# Setup production environment (generate secrets, create directories)
+[group('Setup')]
+[no-cd]
+prod-setup:
+    @echo "Setting up production environment..."
+    @mkdir -p dags logs plugins config backups/postgres monitoring nginx/ssl
+    @echo "✓ Directories created"
+    @echo ""
+    @echo "Generating secrets..."
+    @./scripts/generate_secrets.sh
+    @echo ""
+    @echo "IMPORTANT: Copy the generated secrets to your .env file!"
+    @echo "Template: .env.example"
+
+# Generate all required secrets
+[group('Setup')]
+[no-cd]
+generate-secrets:
+    @./scripts/generate_secrets.sh
+
+# Initialize production database
+[group('Setup')]
+[no-cd]
+prod-init:
+    @echo "Initializing production database..."
+    @docker compose -f {{DOCKER_COMPOSE_FILE}} up airflow-init
+    @echo "✓ Database initialized"
+
+# Build production Docker images
+[group('Build')]
+[no-cd]
+prod-build:
+    @echo "Building production Docker images..."
+    @docker compose -f {{DOCKER_COMPOSE_FILE}} build --no-cache
+    @echo "✓ Build completed"
+
+# ============================================================================
+# SERVICE MANAGEMENT
+# ============================================================================
+
+# Start all production services
+[group('Runtime')]
+[no-cd]
+prod-up:
+    @echo "Starting production services..."
+    @docker compose -f {{DOCKER_COMPOSE_FILE}} up -d
+    @echo "✓ Services started"
+    @echo ""
+    @echo "Waiting for services to be healthy..."
+    @sleep 10
+    @just -f Justfile-prod prod-health
+
+# Start services with monitoring (Prometheus + Grafana)
+[group('Runtime')]
+[no-cd]
+prod-up-monitoring:
+    @echo "Starting production services with monitoring..."
+    @docker compose -f {{DOCKER_COMPOSE_FILE}} --profile monitoring up -d
+    @echo "✓ Services started with monitoring"
+    @echo ""
+    @echo "Access points:"
+    @echo "  - Airflow UI: http://localhost:8080"
+    @echo "  - Grafana: http://localhost:3000"
+    @echo "  - Prometheus: http://localhost:9090"
+
+# Start services with Nginx proxy (SSL/TLS)
+[group('Runtime')]
+[no-cd]
+prod-up-proxy:
+    @echo "Starting production services with Nginx proxy..."
+    @docker compose -f {{DOCKER_COMPOSE_FILE}} --profile proxy up -d
+    @echo "✓ Services started with Nginx proxy"
+    @echo ""
+    @echo "Access points:"
+    @echo "  - HTTP: http://localhost (redirects to HTTPS)"
+    @echo "  - HTTPS: https://localhost"
+
+# Stop all production services
+[group('Runtime')]
+[no-cd]
+prod-down:
+    @echo "Stopping production services..."
+    @docker compose -f {{DOCKER_COMPOSE_FILE}} down
+    @echo "✓ Services stopped"
+
+# Restart all production services
+[group('Runtime')]
+[no-cd]
+prod-restart:
+    @echo "Restarting production services..."
+    @docker compose -f {{DOCKER_COMPOSE_FILE}} restart
+    @echo "✓ Services restarted"
+
+# Scale workers
+[group('Runtime')]
+[no-cd]
+prod-scale workers="2":
+    @echo "Scaling workers to {{workers}} replicas..."
+    @docker compose -f {{DOCKER_COMPOSE_FILE}} up -d --scale airflow-worker={{workers}} --no-recreate
+    @echo "✓ Workers scaled to {{workers}}"
+
+# ============================================================================
+# HEALTH AND MONITORING
+# ============================================================================
+
+# Run health check on all services
+[group('Monitoring')]
+[no-cd]
+prod-health:
+    @./scripts/health_check.sh
+
+# Show service status
+[group('Monitoring')]
+[no-cd]
+prod-status:
+    @docker compose -f {{DOCKER_COMPOSE_FILE}} ps
+
+# View logs for all services
+[group('Monitoring')]
+[no-cd]
+prod-logs:
+    @docker compose -f {{DOCKER_COMPOSE_FILE}} logs -f
+
+# View logs for specific service
+[group('Monitoring')]
+[no-cd]
+prod-logs-service service:
+    @docker compose -f {{DOCKER_COMPOSE_FILE}} logs -f {{service}}
+
+# Show resource usage statistics
+[group('Monitoring')]
+[no-cd]
+prod-stats:
+    @docker stats $(docker compose -f {{DOCKER_COMPOSE_FILE}} ps -q)
+
+# ============================================================================
+# BACKUP AND RECOVERY
+# ============================================================================
+
+# Create database backup
+[group('Backup')]
+[no-cd]
+prod-backup:
+    @echo "Creating database backup..."
+    @./scripts/backup_postgres.sh
+    @echo "✓ Backup completed"
+
+# Restore database from backup
+[group('Backup')]
+[no-cd]
+prod-restore backup_file:
+    @echo "Restoring database from {{backup_file}}..."
+    @./scripts/restore_postgres.sh {{backup_file}}
+    @echo "✓ Restore completed"
+
+# List available backups
+[group('Backup')]
+[no-cd]
+prod-list-backups:
+    @echo "Available backups:"
+    @ls -lh backups/postgres/airflow_backup_*.sql.gz 2>/dev/null || echo "No backups found"
+
+# ============================================================================
+# MAINTENANCE
+# ============================================================================
+
+# Run database migrations
+[group('Maintenance')]
+[no-cd]
+prod-db-migrate:
+    @docker compose -f {{DOCKER_COMPOSE_FILE}} run --rm airflow-cli airflow db migrate
+
+# Check database status
+[group('Maintenance')]
+[no-cd]
+prod-db-check:
+    @docker compose -f {{DOCKER_COMPOSE_FILE}} run --rm airflow-cli airflow db check
+
+# Clean up old task instances
+[group('Maintenance')]
+[no-cd]
+prod-cleanup days="7":
+    @echo "Cleaning up task instances older than {{days}} days..."
+    @docker compose -f {{DOCKER_COMPOSE_FILE}} run --rm airflow-cli airflow db clean --clean-before-timestamp $(date -d "{{days}} days ago" +%Y-%m-%d) --yes
+    @echo "✓ Cleanup completed"
+
+# Vacuum database (PostgreSQL maintenance)
+[group('Maintenance')]
+[no-cd]
+prod-db-vacuum:
+    @echo "Running database vacuum..."
+    @docker compose -f {{DOCKER_COMPOSE_FILE}} exec postgres vacuumdb -U airflow -d airflow --analyze --verbose
+    @echo "✓ Vacuum completed"
+
+# ============================================================================
+# SECURITY
+# ============================================================================
+
+# Rotate Fernet key (WARNING: requires data re-encryption)
+[group('Security')]
+[no-cd]
+prod-rotate-fernet:
+    @echo "WARNING: Rotating Fernet key requires re-encrypting all connections and variables!"
+    @echo "Follow the guide: https://airflow.apache.org/docs/apache-airflow/stable/security/secrets/fernet.html"
+    @echo ""
+    @echo "New Fernet key:"
+    @python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+
+# Generate SSL certificates (self-signed for testing)
+[group('Security')]
+[no-cd]
+prod-generate-ssl:
+    @echo "Generating self-signed SSL certificate..."
+    @mkdir -p nginx/ssl
+    @openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+        -keyout nginx/ssl/key.pem \
+        -out nginx/ssl/cert.pem \
+        -subj "/C=US/ST=State/L=City/O=Organization/CN=localhost"
+    @echo "✓ SSL certificate generated at nginx/ssl/"
+    @echo ""
+    @echo "For production, use certificates from a trusted CA (Let's Encrypt, etc.)"
+
+# ============================================================================
+# CONTAINER ACCESS
+# ============================================================================
+
+# Access scheduler container
+[group('Access')]
+[no-cd]
+prod-bash:
+    @docker compose -f {{DOCKER_COMPOSE_FILE}} exec airflow-scheduler bash
+
+# Access webserver container
+[group('Access')]
+[no-cd]
+prod-bash-webserver:
+    @docker compose -f {{DOCKER_COMPOSE_FILE}} exec airflow-webserver bash
+
+# Access worker container
+[group('Access')]
+[no-cd]
+prod-bash-worker:
+    @docker compose -f {{DOCKER_COMPOSE_FILE}} exec airflow-worker bash
+
+# Run Airflow CLI command
+[group('Access')]
+[no-cd]
+prod-cli +args:
+    @docker compose -f {{DOCKER_COMPOSE_FILE}} run --rm airflow-cli airflow {{args}}
+
+# ============================================================================
+# DAG MANAGEMENT
+# ============================================================================
+
+# List all DAGs
+[group('DAGs')]
+[no-cd]
+prod-dags-list:
+    @docker compose -f {{DOCKER_COMPOSE_FILE}} run --rm airflow-cli airflow dags list
+
+# Trigger a DAG
+[group('DAGs')]
+[no-cd]
+prod-dag-trigger dag_id:
+    @docker compose -f {{DOCKER_COMPOSE_FILE}} run --rm airflow-cli airflow dags trigger {{dag_id}}
+
+# Pause a DAG
+[group('DAGs')]
+[no-cd]
+prod-dag-pause dag_id:
+    @docker compose -f {{DOCKER_COMPOSE_FILE}} run --rm airflow-cli airflow dags pause {{dag_id}}
+
+# Unpause a DAG
+[group('DAGs')]
+[no-cd]
+prod-dag-unpause dag_id:
+    @docker compose -f {{DOCKER_COMPOSE_FILE}} run --rm airflow-cli airflow dags unpause {{dag_id}}
+
+# ============================================================================
+# DEPLOYMENT
+# ============================================================================
+
+# Deploy to production (zero-downtime)
+[group('Deploy')]
+[no-cd]
+prod-deploy:
+    @echo "Deploying to production with zero-downtime..."
+    @echo ""
+    @echo "1. Pulling latest images..."
+    @docker compose -f {{DOCKER_COMPOSE_FILE}} pull
+    @echo ""
+    @echo "2. Running database migrations..."
+    @docker compose -f {{DOCKER_COMPOSE_FILE}} run --rm airflow-init
+    @echo ""
+    @echo "3. Updating services..."
+    @docker compose -f {{DOCKER_COMPOSE_FILE}} up -d --no-deps --build airflow-webserver
+    @docker compose -f {{DOCKER_COMPOSE_FILE}} up -d --no-deps --build airflow-scheduler
+    @docker compose -f {{DOCKER_COMPOSE_FILE}} up -d --no-deps --build airflow-worker
+    @echo ""
+    @echo "4. Waiting for services to be healthy..."
+    @sleep 30
+    @just -f Justfile-prod prod-health
+    @echo ""
+    @echo "✓ Deployment completed successfully"
+
+# Rollback deployment
+[group('Deploy')]
+[no-cd]
+prod-rollback:
+    @echo "Rolling back to previous version..."
+    @docker compose -f {{DOCKER_COMPOSE_FILE}} down
+    @git checkout HEAD~1
+    @docker compose -f {{DOCKER_COMPOSE_FILE}} up -d
+    @echo "✓ Rollback completed"
+
+# ============================================================================
+# HELP
+# ============================================================================
+
+# Show production help
+[group('Help')]
+[no-cd]
+prod-help:
+    @echo "Apache Airflow Production Deployment Tasks"
+    @echo ""
+    @echo "Setup:"
+    @echo "  prod-setup              Setup production environment"
+    @echo "  generate-secrets        Generate all required secrets"
+    @echo "  prod-init              Initialize database"
+    @echo "  prod-build             Build Docker images"
+    @echo ""
+    @echo "Runtime:"
+    @echo "  prod-up                Start all services"
+    @echo "  prod-up-monitoring     Start with monitoring"
+    @echo "  prod-up-proxy          Start with Nginx proxy"
+    @echo "  prod-down              Stop all services"
+    @echo "  prod-restart           Restart all services"
+    @echo "  prod-scale <N>         Scale workers to N replicas"
+    @echo ""
+    @echo "Monitoring:"
+    @echo "  prod-health            Run health checks"
+    @echo "  prod-status            Show service status"
+    @echo "  prod-logs              View all logs"
+    @echo "  prod-stats             Show resource usage"
+    @echo ""
+    @echo "Backup:"
+    @echo "  prod-backup            Create database backup"
+    @echo "  prod-restore <file>    Restore from backup"
+    @echo "  prod-list-backups      List available backups"
+    @echo ""
+    @echo "Maintenance:"
+    @echo "  prod-db-migrate        Run database migrations"
+    @echo "  prod-db-check          Check database status"
+    @echo "  prod-cleanup [days]    Clean old task instances"
+    @echo "  prod-db-vacuum         Vacuum database"
+    @echo ""
+    @echo "Security:"
+    @echo "  prod-rotate-fernet     Rotate Fernet key"
+    @echo "  prod-generate-ssl      Generate SSL certificate"
+    @echo ""
+    @echo "Deployment:"
+    @echo "  prod-deploy            Deploy with zero-downtime"
+    @echo "  prod-rollback          Rollback deployment"
+    @echo ""
+    @echo "Run 'just -f Justfile-prod --list' for full list"

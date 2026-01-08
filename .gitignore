@@ -47,13 +47,16 @@ env/
 .docker/
 
 # Airflow specific
-logs/
-plugins/
+logs/*
+!logs/.gitkeep
+plugins/*
 !plugins/.gitkeep
-dags/
+dags/*
 !dags/.gitkeep
-config/
+config/*
 !config/.gitkeep
+!config/airflow.cfg.template
+!config/log4j2.properties
 
 # PostgreSQL
 postgresql/

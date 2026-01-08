@@ -1,6 +1,12 @@
-# Apache Airflow - Local Development Setup
+# Apache Airflow - Local Development & Production Deployment
 
-This repository provides a complete setup for running Apache Airflow locally using Docker Compose, with a comprehensive Justfile for common development tasks.
+This repository provides a complete setup for running Apache Airflow both locally for development and in production environments, using Docker Compose with comprehensive automation.
+
+## Quick Links
+
+- **Local Development**: Continue reading below
+- **Production Deployment**: See [QUICKSTART.md](QUICKSTART.md) or [PRODUCTION.md](PRODUCTION.md)
+- **Development Guide**: See [AGENTS.md](AGENTS.md)
 
 ## Prerequisites
 
