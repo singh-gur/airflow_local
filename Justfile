@@ -585,3 +585,78 @@ help:
     @echo "  db-shell                Open PostgreSQL shell"
     @echo ""
     @echo "Run 'just --list' for full list of recipes"
+
+# ============================================================================
+# PRODUCTION COMMANDS
+# ============================================================================
+
+# Generate production secrets
+[group('Production')]
+[no-cd]
+prod-secrets:
+    @./scripts/generate_secrets.sh
+
+# Build production image
+[group('Production')]
+[no-cd]
+prod-build:
+    @echo "Building production image..."
+    @docker compose -f docker-compose.prod.yaml build
+
+# Initialize production database
+[group('Production')]
+[no-cd]
+prod-init:
+    @echo "Initializing production database..."
+    @docker compose -f docker-compose.prod.yaml up airflow-init
+
+# Start production services
+[group('Production')]
+[no-cd]
+prod-up:
+    @echo "Starting production services..."
+    @docker compose -f docker-compose.prod.yaml up -d
+    @echo "✓ Production services started"
+    @echo "Access: http://localhost:8080"
+
+# Start production with monitoring
+[group('Production')]
+[no-cd]
+prod-up-monitoring:
+    @echo "Starting production with monitoring..."
+    @docker compose -f docker-compose.prod.yaml --profile monitoring up -d
+    @echo "✓ Services started"
+    @echo "Airflow: http://localhost:8080"
+    @echo "Grafana: http://localhost:3000"
+    @echo "Prometheus: http://localhost:9090"
+
+# Stop production services
+[group('Production')]
+[no-cd]
+prod-down:
+    @docker compose -f docker-compose.prod.yaml down
+
+# View production logs
+[group('Production')]
+[no-cd]
+prod-logs:
+    @docker compose -f docker-compose.prod.yaml logs -f
+
+# Check production health
+[group('Production')]
+[no-cd]
+prod-health:
+    @./scripts/health_check.sh
+
+# Backup production database
+[group('Production')]
+[no-cd]
+prod-backup:
+    @./scripts/backup_postgres.sh
+
+# Scale production workers
+[group('Production')]
+[no-cd]
+prod-scale workers="5":
+    @docker compose -f docker-compose.prod.yaml up -d --scale airflow-worker={{workers}}
+    @echo "✓ Scaled to {{workers}} workers"
