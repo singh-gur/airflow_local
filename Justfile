@@ -391,6 +391,81 @@ clear-cache:
     @docker compose -f {{DOCKER_COMPOSE_FILE}} run --rm airflow-cli airflow dags delete-na
     @docker compose -f {{DOCKER_COMPOSE_FILE}} run --rm airflow-cli airflow jobs cleanup
 
+# Nuclear option: Delete EVERYTHING including all persistent data
+[group('Cleanup')]
+[no-cd]
+clean-all:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo ""
+    echo "╔═══════════════════════════════════════════════════════════════════╗"
+    echo "║                    ⚠️  DANGER ZONE ⚠️                              ║"
+    echo "║                   COMPLETE DATA WIPEOUT                           ║"
+    echo "╚═══════════════════════════════════════════════════════════════════╝"
+    echo ""
+    echo "This will permanently delete:"
+    echo "  ❌ All Docker containers (Airflow, PostgreSQL, Redis)"
+    echo "  ❌ All Docker volumes (PostgreSQL data, Redis data)"
+    echo "  ❌ All Docker images"
+    echo "  ❌ All DAGs execution history"
+    echo "  ❌ All logs"
+    echo "  ❌ All user accounts and connections"
+    echo "  ❌ All variable and connection metadata"
+    echo ""
+    echo "⚠️  THIS CANNOT BE UNDONE! ⚠️"
+    echo ""
+    read -p "Are you absolutely sure? Type 'DELETE' to confirm: " confirmation
+    if [[ "$confirmation" != "DELETE" ]]; then
+        echo ""
+        echo "❌ Aborted. No changes made."
+        exit 1
+    fi
+    echo ""
+    read -p "Last chance! Type 'YES' to proceed: " final_confirmation
+    if [[ "$final_confirmation" != "YES" ]]; then
+        echo ""
+        echo "❌ Aborted. No changes made."
+        exit 1
+    fi
+    echo ""
+    echo "🗑️  Proceeding with complete cleanup..."
+    echo ""
+    echo "Step 1: Stopping all containers..."
+    docker compose -f {{DOCKER_COMPOSE_FILE}} down --volumes --remove-orphans 2>/dev/null || true
+    echo "✓ Containers stopped"
+    echo ""
+    echo "Step 2: Removing all Airflow containers..."
+    docker ps -a | grep airflow | awk '{print $1}' | xargs docker rm -f 2>/dev/null || true
+    echo "✓ Containers removed"
+    echo ""
+    echo "Step 3: Removing all Airflow volumes (PostgreSQL & Redis data)..."
+    docker volume ls | grep airflow | awk '{print $2}' | xargs docker volume rm -f 2>/dev/null || true
+    echo "✓ Volumes removed"
+    echo ""
+    echo "Step 4: Removing all Airflow images..."
+    docker images | grep airflow | awk '{print $3}' | xargs docker rmi -f 2>/dev/null || true
+    echo "✓ Images removed"
+    echo ""
+    echo "Step 5: Cleaning up networks..."
+    docker network prune -f >/dev/null 2>&1
+    echo "✓ Networks cleaned"
+    echo ""
+    echo "Step 6: Running Docker system prune..."
+    docker system prune -af --volumes >/dev/null 2>&1
+    echo "✓ System pruned"
+    echo ""
+    echo "╔═══════════════════════════════════════════════════════════════════╗"
+    echo "║              ✅ COMPLETE CLEANUP FINISHED                          ║"
+    echo "╚═══════════════════════════════════════════════════════════════════╝"
+    echo ""
+    echo "All data has been permanently deleted."
+    echo ""
+    echo "To start fresh:"
+    echo "  1. just setup"
+    echo "  2. just init"
+    echo "  3. just up"
+    echo ""
+
 # ============================================================================
 # BUILD AND DEVELOPMENT
 # ============================================================================
@@ -660,3 +735,96 @@ prod-backup:
 prod-scale workers="5":
     @docker compose -f docker-compose.prod.yaml up -d --scale airflow-worker={{workers}}
     @echo "✓ Scaled to {{workers}} workers"
+
+# Nuclear option: Delete EVERYTHING including all persistent data (PRODUCTION)
+[group('Production')]
+[no-cd]
+prod-clean-all:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo ""
+    echo "╔═══════════════════════════════════════════════════════════════════╗"
+    echo "║              ⚠️  PRODUCTION DANGER ZONE ⚠️                         ║"
+    echo "║              COMPLETE DATA WIPEOUT - PRODUCTION                   ║"
+    echo "╚═══════════════════════════════════════════════════════════════════╝"
+    echo ""
+    echo "⚠️  WARNING: YOU ARE ABOUT TO DELETE PRODUCTION DATA! ⚠️"
+    echo ""
+    echo "This will permanently delete:"
+    echo "  ❌ All production Docker containers (Airflow, PostgreSQL, Redis)"
+    echo "  ❌ All production Docker volumes (PostgreSQL data, Redis data)"
+    echo "  ❌ All production Docker images"
+    echo "  ❌ All DAGs execution history"
+    echo "  ❌ All logs"
+    echo "  ❌ All user accounts and connections"
+    echo "  ❌ All variable and connection metadata"
+    echo "  ❌ ALL PRODUCTION DATA"
+    echo ""
+    echo "⚠️  THIS CANNOT BE UNDONE! BACKUPS RECOMMENDED! ⚠️"
+    echo ""
+    echo "Have you created a backup? (just prod-backup)"
+    read -p "Type 'BACKUP DONE' if you have a backup, or 'SKIP' to continue without: " backup_confirm
+    if [[ "$backup_confirm" != "BACKUP DONE" ]] && [[ "$backup_confirm" != "SKIP" ]]; then
+        echo ""
+        echo "❌ Aborted. No changes made."
+        echo "💡 Run 'just prod-backup' first, then try again."
+        exit 1
+    fi
+    echo ""
+    read -p "Are you absolutely sure? Type 'DELETE PRODUCTION' to confirm: " confirmation
+    if [[ "$confirmation" != "DELETE PRODUCTION" ]]; then
+        echo ""
+        echo "❌ Aborted. No changes made."
+        exit 1
+    fi
+    echo ""
+    read -p "Final confirmation! Type 'YES I AM SURE' to proceed: " final_confirmation
+    if [[ "$final_confirmation" != "YES I AM SURE" ]]; then
+        echo ""
+        echo "❌ Aborted. No changes made."
+        exit 1
+    fi
+    echo ""
+    echo "🗑️  Proceeding with complete production cleanup..."
+    echo ""
+    echo "Step 1: Stopping all production containers..."
+    docker compose -f docker-compose.prod.yaml down --volumes --remove-orphans 2>/dev/null || true
+    echo "✓ Containers stopped"
+    echo ""
+    echo "Step 2: Removing all Airflow containers..."
+    docker ps -a | grep airflow | awk '{print $1}' | xargs docker rm -f 2>/dev/null || true
+    echo "✓ Containers removed"
+    echo ""
+    echo "Step 3: Removing all Airflow volumes (PostgreSQL & Redis data)..."
+    docker volume ls | grep airflow | awk '{print $2}' | xargs docker volume rm -f 2>/dev/null || true
+    echo "✓ Volumes removed (ALL DATA DELETED)"
+    echo ""
+    echo "Step 4: Removing all Airflow images..."
+    docker images | grep airflow | awk '{print $3}' | xargs docker rmi -f 2>/dev/null || true
+    echo "✓ Images removed"
+    echo ""
+    echo "Step 5: Cleaning up networks..."
+    docker network prune -f >/dev/null 2>&1
+    echo "✓ Networks cleaned"
+    echo ""
+    echo "Step 6: Running Docker system prune..."
+    docker system prune -af --volumes >/dev/null 2>&1
+    echo "✓ System pruned"
+    echo ""
+    echo "╔═══════════════════════════════════════════════════════════════════╗"
+    echo "║         ✅ COMPLETE PRODUCTION CLEANUP FINISHED                    ║"
+    echo "╚═══════════════════════════════════════════════════════════════════╝"
+    echo ""
+    echo "All production data has been permanently deleted."
+    echo ""
+    echo "To start fresh:"
+    echo "  1. ./scripts/generate_secrets.sh --create"
+    echo "  2. just prod-build"
+    echo "  3. just prod-init"
+    echo "  4. just prod-up"
+    echo ""
+    echo "To restore from backup (if available):"
+    echo "  1. just prod-init"
+    echo "  2. just prod-up"
+    echo "  3. ./scripts/restore_postgres.sh backups/postgres/<backup_file>"
+    echo ""
