@@ -37,11 +37,27 @@ just up
 
 ## Production Setup
 
-### Step 1: Generate Secrets
+### Step 1: Generate Secrets and Create .env File
 
+**Option A: Automatic (Recommended)**
 ```bash
-# Generate secure passwords and keys
+# Automatically create .env file with all required settings
+./scripts/generate_secrets.sh --create
+```
+
+**Option B: Manual**
+```bash
+# Generate secrets and display on screen
 ./scripts/generate_secrets.sh
+
+# Copy the output to .env manually
+nano .env
+```
+
+**Option C: Direct Save**
+```bash
+# Save output directly to .env file
+./scripts/generate_secrets.sh > .env
 ```
 
 This generates:
@@ -50,25 +66,14 @@ This generates:
 - PostgreSQL password
 - Redis password
 - Admin password
+- Complete minimal .env file
 
-### Step 2: Configure Environment
+If you used `--create`, the .env file is already configured.
+Otherwise, ensure these required variables are set:
 
 ```bash
-# Copy template
-cp .env.example .env
-
-# Edit .env and add the secrets from step 1
-nano .env
-```
-
-**Required variables**:
-```env
-AIRFLOW__CORE__FERNET_KEY=<from generate_secrets.sh>
-AIRFLOW__WEBSERVER__SECRET_KEY=<from generate_secrets.sh>
-POSTGRES_PASSWORD=<from generate_secrets.sh>
-REDIS_PASSWORD=<from generate_secrets.sh>
-_AIRFLOW_WWW_USER_PASSWORD=<from generate_secrets.sh>
-AIRFLOW_UID=<your user id>
+# Verify .env exists and has required variables
+cat .env | grep -E "FERNET_KEY|SECRET_KEY|POSTGRES_PASSWORD|REDIS_PASSWORD"
 ```
 
 ### Step 3: Build Production Image
