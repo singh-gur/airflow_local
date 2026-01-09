@@ -322,6 +322,25 @@ AIRFLOW__METRICS__STATSD_PORT=9125
 
 ## Troubleshooting
 
+### DAG Processor Error: "standalone_dag_processor must be True"
+
+If you see this error:
+```
+airflow-dag-processor-1 | The option [scheduler/standalone_dag_processor] must be True.
+```
+
+**Solution**: This is already configured in `docker-compose.prod.yaml`. Make sure you're using the production compose file:
+
+```bash
+# Use the production file (not docker-compose.yaml)
+docker compose -f docker-compose.prod.yaml up -d
+
+# If error persists, rebuild
+docker compose -f docker-compose.prod.yaml down
+docker compose -f docker-compose.prod.yaml build
+docker compose -f docker-compose.prod.yaml up -d
+```
+
 ### Services Won't Start
 
 ```bash
