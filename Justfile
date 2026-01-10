@@ -4,7 +4,7 @@
 set dotenv-load
 
 # Default Airflow version - change if needed
-AIRFLOW_VERSION := "2.10.4"
+AIRFLOW_VERSION := "3.1.5"
 AIRFLOW_IMAGE := "apache/airflow:" + AIRFLOW_VERSION
 
 # Default admin credentials

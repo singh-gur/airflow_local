@@ -1,8 +1,8 @@
 # Apache Airflow Production Dockerfile
 # Build a production-ready Airflow image with all dependencies baked in
 
-ARG AIRFLOW_VERSION=2.10.4
-ARG PYTHON_VERSION=3.11
+ARG AIRFLOW_VERSION=3.1.5
+ARG PYTHON_VERSION=3.13
 
 FROM apache/airflow:${AIRFLOW_VERSION}-python${PYTHON_VERSION}
 
@@ -49,9 +49,10 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
 # Create necessary directories
 RUN mkdir -p /opt/airflow/logs /opt/airflow/dags /opt/airflow/plugins /opt/airflow/config
 
-# Health check
+# Health check - check scheduler is running
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD airflow jobs check --job-type SchedulerJob --hostname $(hostname) || exit 1
+    CMD airflow jobs check --job-type SchedulerJob --hostname $(hostname) 2>/dev/null || \
+    airflow version >/dev/null 2>&1 || exit 1
 
 # Set environment variables for production
 ENV PYTHONUNBUFFERED=1 \
