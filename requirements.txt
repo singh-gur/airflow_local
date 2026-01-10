@@ -10,6 +10,7 @@
 
 # Security and monitoring
 apache-airflow-providers-common-sql>=1.14.0
+apache-airflow-providers-fab>=1.2.0
 cryptography>=42.0.0
 
 # Email notifications
