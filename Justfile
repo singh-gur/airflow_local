@@ -287,6 +287,12 @@ prod-create-user username password email:
 
 [group('Production')]
 [no-cd]
+prod-web:
+    @echo "Opening Airflow Web UI at http://localhost:8080"
+    @open http://localhost:8080 2>/dev/null || xdg-open http://localhost:8080 2>/dev/null || echo "Please open http://localhost:8080 manually"
+
+[group('Production')]
+[no-cd]
 prod-up:
     @echo "Starting production services..."
     @docker compose -f docker-compose.prod.yaml up -d
