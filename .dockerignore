@@ -1,0 +1,62 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Docker
+.docker
+docker-compose*.yml
+Dockerfile*
+.dockerignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info
+.eggs
+*.egg
+
+# Virtual environments
+venv
+env
+ENV
+.venv
+
+# IDEs
+.vscode
+.idea
+*.swp
+*.swo
+*.code-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Airflow runtime
+logs/*
+plugins/*
+dags/*
+config/*
+postgresql
+redis
+mongodb
+
+# Environment files
+.env
+.env.*
+
+# Documentation
+*.md
+docs/
+
+# CI/CD
+.github
+.gitlab-ci.yml
+.travis.yml
+
+# Just
+justfile
