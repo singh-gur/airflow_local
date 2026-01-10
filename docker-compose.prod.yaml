@@ -346,16 +346,15 @@ services:
         chown -R "${AIRFLOW_UID}:0" /opt/airflow/{logs,dags,plugins,config}
         echo "Airflow version:"
         /entrypoint airflow version
-    environment:
-      <<: *airflow-common-env
-      _AIRFLOW_DB_MIGRATE: 'true'
-      _AIRFLOW_WWW_USER_CREATE: 'true'
-      _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME}
-      _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD}
-      _AIRFLOW_WWW_USER_EMAIL: ${_AIRFLOW_WWW_USER_EMAIL:-admin@example.com}
-      _AIRFLOW_WWW_USER_FIRSTNAME: ${_AIRFLOW_WWW_USER_FIRSTNAME:-Admin}
-      _AIRFLOW_WWW_USER_LASTNAME: ${_AIRFLOW_WWW_USER_LASTNAME:-User}
-      _AIRFLOW_WWW_USER_ROLE: ${_AIRFLOW_WWW_USER_ROLE:-Admin}
+        echo "Running database migrations..."
+        /entrypoint airflow db migrate
+        echo "Database initialization complete!"
+        echo ""
+        echo "NOTE: In Airflow 3.x, users must be created via the API."
+        echo "After starting services, create admin user via:"
+        echo "  curl -X POST 'http://localhost:8080/api/v1/users' \\"
+        echo "    -H 'Content-Type: application/json' \\"
+        echo "    -d '{\"username\": \"admin\", \"first_name\": \"Admin\", \"last_name\": \"User\", \"email\": \"admin@example.com\", \"password\": \"admin123\", \"role\": \"Admin\"}'"
     user: "0:0"
     restart: "no"
 
