@@ -300,6 +300,7 @@ services:
       <<: *airflow-common-env
       _AIRFLOW_DB_MIGRATE: 'true'
       _PIP_ADDITIONAL_REQUIREMENTS: ''
+      AIRFLOW__CORE__AUTH_MANAGER: ~
     user: "0:0"
 
   airflow-cli:
