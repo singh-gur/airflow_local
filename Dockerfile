@@ -39,7 +39,8 @@ COPY --chown=airflow:root requirements.txt .
 
 # Upgrade pip and install Python dependencies
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir apache-airflow-providers-fab
 
 # Copy DAGs, plugins, and config (optional - can be mounted as volumes instead)
 # COPY --chown=airflow:root dags/ /opt/airflow/dags/
@@ -64,4 +65,4 @@ ENV PYTHONUNBUFFERED=1 \
 EXPOSE 8080
 
 # Default command (can be overridden in docker-compose)
-CMD ["webserver"]
+CMD ["api-server"]
