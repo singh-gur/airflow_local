@@ -200,9 +200,9 @@ services:
       --appendonly yes
       --appendfsync everysec
 
-  airflow-webserver:
+  airflow-api-server:
     <<: *airflow-common
-    command: webserver
+    command: api-server
     ports:
       - "${AIRFLOW_WEBSERVER_PORT:-8080}:8080"
     healthcheck:
