@@ -327,8 +327,8 @@ prod-clean-all:
     echo ""
     echo "WARNING: This will delete ALL production data!"
     echo ""
-    read -p "Type 'DELETE PRODUCTION' to confirm: " confirmation
-    if [[ "$confirmation" != "DELETE PRODUCTION" ]]; then
+    read -p "Type 'yes' to confirm: " confirmation
+    if [[ "$confirmation" != "yes" && "$confirmation" != "y" && "$confirmation" != "YES" && "$confirmation" != "Y" ]]; then
         echo "Aborted."
         exit 1
     fi
