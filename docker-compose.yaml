@@ -56,7 +56,7 @@ x-airflow-common:
   environment:
     &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: CeleryExecutor
-    AIRFLOW__CORE__AUTH_MANAGER: airflow.auth.managers.base_auth_manager.BaseAuthManager
+    AIRFLOW__CORE__AUTH_MANAGER: ~
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
     AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
     AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
@@ -300,7 +300,6 @@ services:
       <<: *airflow-common-env
       _AIRFLOW_DB_MIGRATE: 'true'
       _PIP_ADDITIONAL_REQUIREMENTS: ''
-      AIRFLOW__CORE__AUTH_MANAGER: ~
     user: "0:0"
 
   airflow-cli:
