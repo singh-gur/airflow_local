@@ -42,7 +42,25 @@ init:
     @echo "Initializing Airflow database..."
     @docker compose -f {{DOCKER_COMPOSE_FILE}} up airflow-init
     @echo ""
-    @echo "Database initialized! Admin user: {{AIRFLOW_USER}} / {{AIRFLOW_PASSWORD}}"
+    @echo "Database initialized!"
+    @echo ""
+    @echo "IMPORTANT: In Airflow 3.x, users must be created via the API."
+    @echo "After starting services, create admin user with:"
+    @echo "  just create-user admin admin123 admin@example.com"
+    @echo ""
+    @echo "Or manually via curl:"
+    @echo "  curl -X POST 'http://localhost:8080/api/v1/users' \\"
+    @echo "    -H 'Content-Type: application/json' \\"
+    @echo "    -d '{\"username\": \"admin\", \"first_name\": \"Admin\", \"last_name\": \"User\", \"email\": \"admin@example.com\", \"password\": \"admin123\", \"role\": \"Admin\"}'"
+
+[group('Setup')]
+[no-cd]
+create-user username password email:
+    @echo "Creating user '{{username}}' via API..."
+    @curl -s -X POST 'http://localhost:8080/api/v1/users' \
+      -H 'Content-Type: application/json' \
+      -d '{"username": "{{username}}", "first_name": "Admin", "last_name": "User", "email": "{{email}}", "password": "{{password}}", "role": "Admin"}' \
+      || echo "Failed to create user. Make sure webserver is running."
 
 # ============================================================================
 # STARTING AND STOPPING
@@ -257,6 +275,15 @@ prod-build:
 prod-init:
     @echo "Initializing production database..."
     @docker compose -f docker-compose.prod.yaml up airflow-init
+
+[group('Production')]
+[no-cd]
+prod-create-user username password email:
+    @echo "Creating user '{{username}}' via API..."
+    @curl -s -X POST 'http://localhost:8080/api/v1/users' \
+      -H 'Content-Type: application/json' \
+      -d '{"username": "{{username}}", "first_name": "Admin", "last_name": "User", "email": "{{email}}", "password": "{{password}}", "role": "Admin"}' \
+      || echo "Failed to create user. Make sure webserver is running."
 
 [group('Production')]
 [no-cd]
