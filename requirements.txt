@@ -1,0 +1,24 @@
+# Custom Python dependencies for Airflow
+# Add your Python package requirements here, one per line
+#
+# Format: package_name==version
+# Or: package_name>=version
+#
+# Examples:
+#   apache-airflow-providers-amazon==8.0.0
+#   apache-airflow-providers-google==10.0.0
+#   pandas>=2.0.0
+#   numpy>=1.24.0
+#
+# For production deployments, pin exact versions to ensure reproducibility
+
+# Docker provider for DockerOperator
+apache-airflow-providers-docker>=3.5.0
+
+# Uncomment and add your dependencies below:
+# apache-airflow-providers-amazon>=8.0.0
+# apache-airflow-providers-google>=10.0.0
+# apache-airflow-providers-microsoft-azure>=7.0.0
+# apache-airflow-providers-postgres>=5.0.0
+# apache-airflow-providers-redis>=3.0.0
+# apache-airflow-providers-cncf-kubernetes>=7.0.0

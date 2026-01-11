@@ -1,0 +1,421 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+
+# Airflow 3.1.5 Production Docker Compose Configuration
+# Python Version: 3.13
+#
+# This configuration is designed for production deployment with:
+# - CeleryExecutor for distributed task execution
+# - PostgreSQL 16 as metadata database
+# - Redis 7.2 as message broker
+# - All Airflow core services (scheduler, triggerer, worker, api-server, dag-processor)
+#
+# Usage:
+#   1. Copy this file to your deployment directory
+#   2. Create .env file with your configuration (see .env.example)
+#   3. Run: just init    # Initialize the environment
+#   4. Run: just up      # Start all services
+#
+# Management Commands (via just):
+#   just init            - Initialize database and create admin user
+#   just up              - Start all services in detached mode
+#   just up-debug        - Start all services in foreground (for debugging)
+#   just down            - Stop all services (preserve volumes)
+#   just down-vols       - Stop all services and remove volumes
+#   just logs            - Follow logs from all services
+#   just status          - Show service status
+#   just restart         - Restart all services
+#   just migrate         - Run database migrations
+#   just scale-worker=n  - Scale workers to n instances
+#
+---
+x-airflow-common: &airflow-common
+  # Airflow image with Python 3.13
+  image: ${AIRFLOW_IMAGE_NAME:-apache/airflow:3.1.5}
+  env_file:
+    - ${ENV_FILE_PATH:-.env}
+  environment:
+    &airflow-common-env
+    # Core executor configuration
+    AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+    AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+
+    # Database configuration
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD:-airflow}@postgres/${POSTGRES_DB:-airflow}
+    AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD:-airflow}@postgres/${POSTGRES_DB:-airflow}
+
+    # Celery broker configuration
+    AIRFLOW__CELERY__BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
+    AIRFLOW__CELERY__BROKER_USE_SSL: 'false'  # Set to 'true' in production with proper SSL configuration
+
+    # Security configuration
+    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:-}
+    AIRFLOW__CORE__SECURE_MODE: 'true'
+    AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_WEBSERVER_SECRET_KEY:-change-this-in-production}
+
+    # DAG and execution configuration
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: '${AIRFLOW_DAGS_PAUSED_AT_CREATION:-false}'
+    AIRFLOW__CORE__LOAD_EXAMPLES: '${AIRFLOW_LOAD_EXAMPLES:-false}'
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: 'http://airflow-apiserver:8080/execution/'
+
+    # Scheduler configuration
+    AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: 'true'
+    AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL: '${AIRFLOW_SCHEDULER_DAG_DIR_LIST_INTERVAL:-30}'
+    AIRFLOW__SCHEDULER__MAX_DAGRUNS_TO_CREATE_PER_LOOP: '${AIRFLOW_SCHEDULER_MAX_DAGRUNS:-10}'
+    AIRFLOW__SCHEDULER__MAX_PARSING_RUNS: '${AIRFLOW_SCHEDULER_MAX_PARSING_RUNS:-0}'
+
+    # Worker configuration
+    AIRFLOW__CELERY__WORKER_CONCURRENCY: ${AIRFLOW_WORKER_CONCURRENCY:-16}
+    AIRFLOW__CELERY__WORKER_PREFETCH_MULTIPLIER: ${AIRFLOW_WORKER_PREFETCH_MULTIPLIER:-1}
+
+    # API server configuration
+    AIRFLOW__API__AUTH_BACKENDS: 'airflow.providers.fab.auth_manager.api.auth.backend.session'
+
+    # Logging configuration
+    AIRFLOW__LOGGING__REMOTE_LOGGING: '${AIRFLOW_REMOTE_LOGGING:-false}'
+    AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID: ${AIRFLOW_REMOTE_LOG_CONN_ID:-}
+    AIRFLOW__LOGGING__BASE_LOG_FOLDER: '/opt/airflow/logs'
+
+    # Database connection pool settings
+    AIRFLOW__DATABASE__SQL_ALCHEMY_MAX_OVERFLOW: ${AIRFLOW_DB_MAX_OVERFLOW:-10}
+    AIRFLOW__DATABASE__SQL_ALCHEMY_POOL_SIZE: ${AIRFLOW_DB_POOL_SIZE:-5}
+    AIRFLOW__DATABASE__SQL_ALCHEMY_POOL_TIMEOUT: ${AIRFLOW_DB_POOL_TIMEOUT:-30}
+
+    # PIP additional requirements (only for quick checks, use custom image for production)
+    _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-}
+
+    # Custom config file path
+    AIRFLOW_CONFIG: '/opt/airflow/config/airflow.cfg'
+
+  volumes:
+    - ${AIRFLOW_PROJ_DIR:-.}/dags:/opt/airflow/dags
+    - ${AIRFLOW_PROJ_DIR:-.}/logs:/opt/airflow/logs
+    - ${AIRFLOW_PROJ_DIR:-.}/config:/opt/airflow/config
+    - ${AIRFLOW_PROJ_DIR:-.}/plugins:/opt/airflow/plugins
+
+  user: "${AIRFLOW_UID:-50000}:0"
+
+  depends_on:
+    &airflow-common-depends-on
+    redis:
+      condition: service_healthy
+    postgres:
+      condition: service_healthy
+
+  networks:
+    - airflow-network
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16
+    container_name: airflow-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-airflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-airflow}
+      POSTGRES_DB: ${POSTGRES_DB:-airflow}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER:-airflow}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - airflow-network
+    command: >
+      postgres
+      -c max_connections=200
+      -c shared_buffers=256MB
+      -c work_mem=4MB
+      -c maintenance_work_mem=128MB
+      -c effective_cache_size=512MB
+
+  # Redis Message Broker
+  redis:
+    image: redis:7.2-bookworm
+    container_name: airflow-redis
+    expose:
+      - 6379
+    command: redis-server --requirepass ${REDIS_PASSWORD:-} --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - airflow-network
+
+  # Airflow API Server
+  airflow-apiserver:
+    <<: *airflow-common
+    container_name: airflow-apiserver
+    command: api-server
+    ports:
+      - "${AIRFLOW_WEBSERVER_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/api/v2/version"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+    networks:
+      - airflow-network
+
+  # Airflow Scheduler
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: airflow-scheduler
+    command: scheduler
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8974/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+    networks:
+      - airflow-network
+
+  # Airflow DAG Processor
+  airflow-dag-processor:
+    <<: *airflow-common
+    container_name: airflow-dag-processor
+    command: dag-processor
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type DagProcessorJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+    networks:
+      - airflow-network
+
+  # Airflow Worker
+  airflow-worker:
+    <<: *airflow-common
+    container_name: airflow-worker
+    command: celery worker
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - 'celery --app airflow.providers.celery.executors.celery_executor.app inspect ping -d "celery@$${HOSTNAME}" || celery --app airflow.executors.celery_executor.app inspect ping -d "celery@$${HOSTNAME}"'
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    environment:
+      <<: *airflow-common-env
+      # Required to handle warm shutdown of the celery workers properly
+      # See https://airflow.apache.org/docs/docker-stack/entrypoint.html#signal-propagation
+      DUMB_INIT_SETSID: "0"
+      # Docker socket configuration for DockerOperator
+      DOCKER_HOST: ${DOCKER_HOST:-unix:///var/run/docker.sock}
+    volumes:
+      - ${AIRFLOW_PROJ_DIR:-.}/dags:/opt/airflow/dags
+      - ${AIRFLOW_PROJ_DIR:-.}/logs:/opt/airflow/logs
+      - ${AIRFLOW_PROJ_DIR:-.}/config:/opt/airflow/config
+      - ${AIRFLOW_PROJ_DIR:-.}/plugins:/opt/airflow/plugins
+      # Mount Docker socket for DockerOperator
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-apiserver:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    networks:
+      - airflow-network
+
+  # Airflow Triggerer (for deferrable tasks)
+  airflow-triggerer:
+    <<: *airflow-common
+    container_name: airflow-triggerer
+    command: triggerer
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type TriggererJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+    networks:
+      - airflow-network
+
+  # Initialization Service (runs once on first deployment)
+  airflow-init:
+    <<: *airflow-common
+    container_name: airflow-init
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        echo "=========================================="
+        echo "Airflow Initialization Started"
+        echo "=========================================="
+
+        # Set AIRFLOW_UID if not set
+        if [[ -z "${AIRFLOW_UID}" ]]; then
+          echo "WARNING: AIRFLOW_UID not set. Using default 50000."
+          export AIRFLOW_UID=50000
+        fi
+
+        # Create necessary directories
+        mkdir -p /opt/airflow/{logs,dags,plugins,config}
+
+        # Display resource information
+        one_meg=1048576
+        mem_available=$$(($$(getconf _PHYS_PAGES) * $$(getconf PAGE_SIZE) / one_meg))
+        cpus_available=$$(grep -cE 'cpu[0-9]+' /proc/stat)
+
+        echo "Available Memory: $${mem_available} MB"
+        echo "Available CPUs: $${cpus_available}"
+
+        # Run airflow version
+        echo ""
+        echo "Airflow Version:"
+        /entrypoint airflow version
+
+        # Initialize config
+        echo ""
+        echo "Initializing Airflow configuration..."
+        /entrypoint airflow config list >/dev/null 2>&1 || true
+
+        # Run database migrations
+        echo ""
+        echo "Running database migrations..."
+        /entrypoint airflow db migrate
+
+        # Create admin user if requested
+        if [[ "${_AIRFLOW_WWW_USER_CREATE:-false}" == "true" ]]; then
+          echo ""
+          echo "Creating admin user..."
+          /entrypoint airflow users create \
+            --username "${_AIRFLOW_WWW_USER_USERNAME:-admin}" \
+            --password "${_AIRFLOW_WWW_USER_PASSWORD:-admin}" \
+            --firstname "Admin" \
+            --lastname "User" \
+            --role "Admin" \
+            --email "${_AIRFLOW_WWW_USER_EMAIL:-admin@example.com}" || true
+        fi
+
+        # Fix ownership
+        echo ""
+        echo "Setting permissions..."
+        chown -R "${AIRFLOW_UID}:0" /opt/airflow/
+
+        echo ""
+        echo "=========================================="
+        echo "Airflow Initialization Complete"
+        echo "=========================================="
+    environment:
+      <<: *airflow-common-env
+      _AIRFLOW_DB_MIGRATE: 'true'
+      _AIRFLOW_WWW_USER_CREATE: '${AIRFLOW_CREATE_ADMIN_USER:-false}'
+      _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_ADMIN_USERNAME:-admin}
+      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD:-admin}
+      _AIRFLOW_WWW_USER_EMAIL: ${AIRFLOW_ADMIN_EMAIL:-admin@example.com}
+      _AIRFLOW_WWW_USER_ROLE: Admin
+      _PIP_ADDITIONAL_REQUIREMENTS: ''
+    user: "0:0"
+    networks:
+      - airflow-network
+
+  # CLI Debug Service (activate with: just cli)
+  airflow-cli:
+    <<: *airflow-common
+    container_name: airflow-cli
+    profiles:
+      - debug
+    environment:
+      <<: *airflow-common-env
+      CONNECTION_CHECK_MAX_COUNT: "0"
+      DOCKER_HOST: ${DOCKER_HOST:-unix:///var/run/docker.sock}
+    volumes:
+      - ${AIRFLOW_PROJ_DIR:-.}/dags:/opt/airflow/dags
+      - ${AIRFLOW_PROJ_DIR:-.}/logs:/opt/airflow/logs
+      - ${AIRFLOW_PROJ_DIR:-.}/config:/opt/airflow/config
+      - ${AIRFLOW_PROJ_DIR:-.}/plugins:/opt/airflow/plugins
+      # Mount Docker socket for DockerOperator
+      - /var/run/docker.sock:/var/run/docker.sock
+    command:
+      - bash
+      - -c
+      - airflow
+    depends_on:
+      <<: *airflow-common-depends-on
+    networks:
+      - airflow-network
+
+  # Flower Monitoring Dashboard (activate with: just flower-up)
+  flower:
+    <<: *airflow-common
+    container_name: airflow-flower
+    command: celery flower
+    profiles:
+      - flower
+    ports:
+      - "${AIRFLOW_FLOWER_PORT:-5555}:5555"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:5555/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+    networks:
+      - airflow-network
+
+networks:
+  airflow-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+volumes:
+  postgres-data:
+    driver: local

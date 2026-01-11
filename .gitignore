@@ -45,6 +45,7 @@ env/
 
 # Docker
 .docker/
+docker-compose.override.yml
 
 # Airflow specific
 logs/*
@@ -55,16 +56,12 @@ dags/*
 !dags/.gitkeep
 config/*
 !config/.gitkeep
-!config/airflow.cfg.template
-!config/log4j2.properties
+!config/airflow.cfg
 
-# PostgreSQL
-postgresql/
-
-# Redis
+# Data directories
+data/
+postgres/
 redis/
-
-# MongoDB
 mongodb/
 
 # Local config
@@ -96,3 +93,21 @@ dmypy.json
 .project
 .pydevproject
 .settings/
+
+# Backup files
+*.bak
+*.backup
+*~
+*.sql
+
+# Security
+*.pem
+*.key
+*.crt
+secrets/
+credentials/
+
+# CI/CD
+.travis.yml
+.github/
+!.github/workflows/
