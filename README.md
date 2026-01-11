@@ -26,8 +26,9 @@ Production-ready Docker Compose deployment for Apache Airflow 3.1.5 with Python 
 # 1. Install just
 curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin
 
-# 2. Copy environment file
+# 2. Copy environment file and generate secure keys
 cp .env.example .env
+just setup-secure
 
 # 3. Initialize (creates dirs, DB, admin user)
 just init
@@ -167,17 +168,19 @@ cp .env.example .env
 
 #### 3.2 Generate Secure Keys
 
-Generate and set the following secure values in `.env`:
+Generate secure keys for Airflow (Fernet key for encryption, webserver secret for sessions):
 
 ```bash
-# Generate Fernet key (for encrypting sensitive data)
-python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-# Output: abc123... (copy this)
+# Generate and display keys (copy manually if needed)
+just generate-keys
 
-# Generate webserver secret key
-python3 -c "import secrets; print(secrets.token_urlsafe(32))"
-# Output: xyz789... (copy this)
+# OR generate and automatically save to .env file
+just setup-secure
 ```
+
+This will generate:
+- **AIRFLOW_FERNET_KEY** - Used for encrypting connections and variables
+- **AIRFLOW_WEBSERVER_SECRET_KEY** - Used for signing session cookies
 
 #### 3.3 Edit the Environment File
 
@@ -188,10 +191,6 @@ nano .env
 Update these critical values:
 
 ```bash
-# Security keys (generated above)
-AIRFLOW_FERNET_KEY=your_fernet_key_here
-AIRFLOW_WEBSERVER_SECRET_KEY=your_webserver_secret_here
-
 # Passwords (change these!)
 POSTGRES_PASSWORD=secure_password_here
 REDIS_PASSWORD=secure_password_here
@@ -202,6 +201,8 @@ AIRFLOW_ADMIN_USERNAME=admin
 AIRFLOW_ADMIN_PASSWORD=secure_password_here
 AIRFLOW_ADMIN_EMAIL=admin@example.com
 ```
+
+**Note:** The security keys (AIRFLOW_FERNET_KEY, AIRFLOW_WEBSERVER_SECRET_KEY) are already set by `just setup-secure`.
 
 #### 3.4 Set File Permissions (Linux)
 

@@ -63,6 +63,90 @@ check-docker-compose:
 # INITIALIZATION
 # =============================================================================
 
+# =============================================================================
+# INITIALIZATION
+# =============================================================================
+
+# Generate secure keys for production deployment
+[no-cd]
+generate-keys:
+    #!/usr/bin/env bash
+    set -e
+
+    echo "========================================"
+    echo "Generating Secure Keys for Airflow"
+    echo "========================================"
+    echo ""
+
+    # Generate Fernet key (requires cryptography package)
+    # Fernet key must be Base64-encoded and 32 bytes URL-safe
+    if command -v python3 &> /dev/null && python3 -c "from cryptography.fernet import Fernet" 2>/dev/null; then
+        FERNET_KEY=$(python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
+        echo "Generated Fernet key using Python cryptography library."
+    else
+        # Fallback: Generate a valid-looking key (users should install cryptography for proper key)
+        FERNET_KEY=$(openssl rand -base64 32)
+        echo "Note: cryptography library not installed. Using OpenSSL-generated key."
+        echo "For production, install cryptography and regenerate: pip install cryptography"
+    fi
+
+    echo ""
+    echo "Fernet Key:"
+    echo "  $FERNET_KEY"
+    echo ""
+
+    # Generate webserver secret key (URL-safe Base64, 32 bytes)
+    WEB_SECRET=$(openssl rand -base64 32)
+    echo "Webserver Secret Key:"
+    echo "  $WEB_SECRET"
+    echo ""
+
+    # Option to update .env file
+    if [ -f ".env" ]; then
+        echo "========================================"
+        echo "Updating .env file with generated keys..."
+        echo "========================================"
+
+        # Update or add AIRFLOW_FERNET_KEY
+        if grep -q "^AIRFLOW_FERNET_KEY=" .env 2>/dev/null; then
+            sed -i "s|^AIRFLOW_FERNET_KEY=.*|AIRFLOW_FERNET_KEY=$FERNET_KEY|" .env
+        else
+            echo "AIRFLOW_FERNET_KEY=$FERNET_KEY" >> .env
+        fi
+
+        # Update or add AIRFLOW_WEBSERVER_SECRET_KEY
+        if grep -q "^AIRFLOW_WEBSERVER_SECRET_KEY=" .env 2>/dev/null; then
+            sed -i "s|^AIRFLOW_WEBSERVER_SECRET_KEY=.*|AIRFLOW_WEBSERVER_SECRET_KEY=$WEB_SECRET|" .env
+        else
+            echo "AIRFLOW_WEBSERVER_SECRET_KEY=$WEB_SECRET" >> .env
+        fi
+
+        echo ""
+        echo "Keys have been saved to .env file."
+    else
+        echo "========================================"
+        echo "No .env file found. Add these to your .env:"
+        echo "========================================"
+        echo ""
+        echo "AIRFLOW_FERNET_KEY=$FERNET_KEY"
+        echo "AIRFLOW_WEBSERVER_SECRET_KEY=$WEB_SECRET"
+    fi
+
+    echo ""
+    echo "IMPORTANT: Keep these keys safe! They are used for:"
+    echo "  - AIRFLOW_FERNET_KEY: Encrypting connections and variables"
+    echo "  - AIRFLOW_WEBSERVER_SECRET_KEY: Signing session cookies"
+    echo ""
+    echo "========================================"
+    echo "Key Generation Complete!"
+    echo "========================================"
+
+# Generate and apply secure keys to .env
+[no-cd]
+setup-secure: generate-keys
+    @echo ""
+    @echo "Keys generated and saved. Run 'just init' to continue."
+
 # Initialize the environment (create directories and run init service)
 [no-cd]
 init: check-docker check-docker-compose create-dirs
@@ -282,9 +366,9 @@ backup:
     #!/usr/bin/env bash
     set -e
     BACKUP_FILE="backup_airflow_$(date +%Y%m%d_%H%M%S).sql"
-    echo "Creating backup: {{BACKUP_FILE}}"
-    {{dc_cmd}} exec -T postgres pg_dump -U airflow airflow > "{{BACKUP_FILE}}"
-    echo "Backup created: {{BACKUP_FILE}}"
+    echo "Creating backup: $BACKUP_FILE"
+    {{dc_cmd}} exec -T postgres pg_dump -U airflow airflow > "$BACKUP_FILE"
+    echo "Backup created: $BACKUP_FILE"
 
 # Restore database from backup
 [no-cd]
@@ -376,6 +460,8 @@ help:
     @echo "Initialization:"
     @echo "  init              Initialize the environment (run once)"
     @echo "  create-dirs       Create required directories"
+    @echo "  generate-keys     Generate secure Fernet and secret keys"
+    @echo "  setup-secure      Generate keys and save to .env"
     @echo ""
     @echo "Start/Stop:"
     @echo "  up                Start all services (detached)"
@@ -408,7 +494,7 @@ help:
     @echo "CLI Commands:"
     @echo "  airflow <args>    Run airflow CLI command"
     @echo "  bash              Enter bash shell in CLI container"
-    @echo "  python            Enter Python shell in CLI container"
+    @echo "  python            Enter Python shell"
     @echo "  dags-list         List all DAGs"
     @echo "  dag-unpause <id>  Unpause a DAG"
     @echo "  dag-pause <id>    Pause a DAG"
